@@ -1,6 +1,7 @@
 const Cart = require('./cart.model');
 const Product = require('../product/product.model');
 const ApiError = require('../../common/errors/ApiError');
+const { MAX_QTY_PER_ITEM } = require('../../common/constants/cart');
 
 /**
  * Add item to cart
@@ -15,8 +16,12 @@ const addToCart = async (userId, productId, quantity) => {
         throw new ApiError(404, 'Product not found or inactive');
     }
 
+    if (quantity > MAX_QTY_PER_ITEM) {
+        throw new ApiError(400, `Cannot add more than ${MAX_QTY_PER_ITEM} of this item`);
+    }
+
     if (product.stock < quantity) {
-        throw new ApiError(400, `Only ${product.stock} items available in stock`);
+        throw new ApiError(400, `Only ${product.stock} items available in stock (Soft Check)`);
     }
 
     let cart = await Cart.findOne({ userId });
@@ -31,6 +36,11 @@ const addToCart = async (userId, productId, quantity) => {
 
         if (itemIndex > -1) {
             const newQuantity = cart.items[itemIndex].quantity + quantity;
+
+            if (newQuantity > MAX_QTY_PER_ITEM) {
+                throw new ApiError(400, `Total items for this product cannot exceed ${MAX_QTY_PER_ITEM}`);
+            }
+
             if (product.stock < newQuantity) {
                 throw new ApiError(400, `Cannot add more. Total stock: ${product.stock}`);
             }
@@ -58,6 +68,10 @@ const updateCartItem = async (userId, productId, quantity) => {
         throw new ApiError(404, 'Product not found or inactive');
     }
 
+    if (quantity > MAX_QTY_PER_ITEM) {
+        throw new ApiError(400, `Maximum allowed quantity is ${MAX_QTY_PER_ITEM}`);
+    }
+
     if (product.stock < quantity) {
         throw new ApiError(400, `Only ${product.stock} items available in stock`);
     }
@@ -69,7 +83,7 @@ const updateCartItem = async (userId, productId, quantity) => {
 
     const itemIndex = cart.items.findIndex((item) => item.productId.toString() === productId);
     if (itemIndex === -1) {
-        throw new ApiError(44, 'Item not found in cart');
+        throw new ApiError(400, 'Item not found in cart');
     }
 
     cart.items[itemIndex].quantity = quantity;
@@ -93,24 +107,40 @@ const getCart = async (userId) => {
 
     // Calculate subtotals and total server-side
     let cartTotal = 0;
-    const items = cart.items.map((item) => {
-        const product = item.productId;
-        const subtotal = product.price * item.quantity;
-        cartTotal += subtotal;
+    const items = [];
 
-        return {
-            product: {
-                id: product._id,
-                name: product.name,
-                price: product.price,
-                images: product.images,
-                unit: product.unit,
-                isActive: product.isActive,
-                availableStock: product.stock
-            },
-            quantity: item.quantity,
-            subtotal: Number(subtotal.toFixed(2)),
-        };
+    cart.items.forEach((item) => {
+        const product = item.productId;
+
+        if (product && product.isActive) {
+            const subtotal = product.price * item.quantity;
+            cartTotal += subtotal;
+
+            items.push({
+                product: {
+                    id: product._id,
+                    name: product.name,
+                    price: product.price,
+                    images: product.images,
+                    unit: product.unit,
+                    availableStock: product.stock,
+                    isVerified: true
+                },
+                quantity: item.quantity,
+                subtotal: Number(subtotal.toFixed(2)),
+            });
+        } else {
+            items.push({
+                product: {
+                    id: product ? product._id : item.productId,
+                    name: product ? product.name : 'Unknown Product',
+                    isVerified: false,
+                    error: 'Product is no longer available'
+                },
+                quantity: item.quantity,
+                subtotal: 0,
+            });
+        }
     });
 
     return {
