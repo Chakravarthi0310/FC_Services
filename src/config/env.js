@@ -12,10 +12,12 @@ const envSchema = z.object({
     AWS_REGION: z.string(),
     AWS_ACCESS_KEY_ID: z.string(),
     AWS_SECRET_ACCESS_KEY: z.string(),
-    AWS_S3_BUCKET: z.string(),
+    AWS_S3_BUCKET_NAME: z.string(),
     JWT_SECRET: z.string(),
     CORS_ORIGIN: z.string().default('*'),
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
+    RAZORPAY_KEY_ID: z.string(),
+    RAZORPAY_KEY_SECRET: z.string(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
