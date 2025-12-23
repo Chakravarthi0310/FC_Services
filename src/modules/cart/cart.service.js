@@ -117,35 +117,29 @@ const getCart = async (userId) => {
             cartTotal += subtotal;
 
             items.push({
-                product: {
-                    id: product._id,
+                productId: {
+                    _id: product._id,
                     name: product.name,
                     price: product.price,
                     images: product.images,
                     unit: product.unit,
-                    availableStock: product.stock,
-                    isVerified: true
+                    stock: product.stock,
+                    isActive: product.isActive
                 },
                 quantity: item.quantity,
+                priceAtAddTime: item.priceAtAddTime || product.price,
                 subtotal: Number(subtotal.toFixed(2)),
             });
-        } else {
-            items.push({
-                product: {
-                    id: product ? product._id : item.productId,
-                    name: product ? product.name : 'Unknown Product',
-                    isVerified: false,
-                    error: 'Product is no longer available'
-                },
-                quantity: item.quantity,
-                subtotal: 0,
-            });
         }
+        // If product is inactive or deleted, we skip it or keep with error?
+        // Let's follow frontend types and just provide what's needed.
     });
 
     return {
+        _id: cart._id,
         userId: cart.userId,
         items,
+        subtotal: Number(cartTotal.toFixed(2)),
         total: Number(cartTotal.toFixed(2)),
         updatedAt: cart.updatedAt,
     };

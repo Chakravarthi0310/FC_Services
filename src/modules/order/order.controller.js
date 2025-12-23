@@ -4,7 +4,7 @@ const createOrder = async (req, res, next) => {
     try {
         const { deliveryAddress } = req.body;
         const order = await orderService.createOrder(req.user._id, deliveryAddress);
-        res.status(201).json(order);
+        res.status(201).json({ success: true, data: order });
     } catch (error) {
         next(error);
     }
@@ -13,7 +13,7 @@ const createOrder = async (req, res, next) => {
 const getUserOrders = async (req, res, next) => {
     try {
         const orders = await orderService.getUserOrders(req.user._id);
-        res.json(orders);
+        res.json({ success: true, data: orders });
     } catch (error) {
         next(error);
     }
@@ -22,7 +22,7 @@ const getUserOrders = async (req, res, next) => {
 const getOrderById = async (req, res, next) => {
     try {
         const order = await orderService.getOrderById(req.params.orderId, req.user._id);
-        res.json(order);
+        res.json({ success: true, data: order });
     } catch (error) {
         next(error);
     }
@@ -32,7 +32,7 @@ const updateOrderStatus = async (req, res, next) => {
     try {
         const { status } = req.body;
         const order = await orderService.updateOrderStatus(req.params.orderId, status);
-        res.json(order);
+        res.json({ success: true, data: order });
     } catch (error) {
         next(error);
     }
@@ -41,7 +41,7 @@ const updateOrderStatus = async (req, res, next) => {
 const cancelOrder = async (req, res, next) => {
     try {
         const order = await orderService.cancelOrder(req.params.orderId, req.user._id);
-        res.json(order);
+        res.json({ success: true, data: order });
     } catch (error) {
         next(error);
     }

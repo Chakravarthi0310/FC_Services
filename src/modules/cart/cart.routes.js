@@ -13,7 +13,8 @@ router.use(authenticate, authorize(roles.CUSTOMER));
 router
     .route('/')
     .get(cartController.getCart)
-    .post(validate(cartValidation.addToCart), cartController.addToCart);
+    .post(validate(cartValidation.addToCart), cartController.addToCart)
+    .delete(cartController.clearCart);
 
 router
     .route('/:productId')
