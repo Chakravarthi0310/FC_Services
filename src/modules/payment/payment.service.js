@@ -49,6 +49,7 @@ const createPaymentOrder = async (orderId, userId) => {
     }
 
     try {
+        console.log('DEBUG: Starting createPaymentOrder try block');
         console.log('Razorpay: Creating order with', {
             amount: Math.round(order.totalAmount * 100),
             currency: 'INR',
@@ -65,7 +66,7 @@ const createPaymentOrder = async (orderId, userId) => {
                 orderNumber: order.orderNumber,
             },
         });
-        console.log('Razorpay: Order created successfully', { razorpayOrderId: razorpayOrder.id });
+        console.log('DEBUG: Razorpay order created', { id: razorpayOrder.id });
 
         // Create payment record
         const payment = await Payment.create({
@@ -75,10 +76,12 @@ const createPaymentOrder = async (orderId, userId) => {
             providerOrderId: razorpayOrder.id,
             status: paymentStatus.CREATED,
         });
+        console.log('DEBUG: Payment record created', { id: payment._id });
 
         // Update order status to PAYMENT_PENDING
         order.status = orderStatus.PAYMENT_PENDING;
         await order.save();
+        console.log('DEBUG: Order updated to PAYMENT_PENDING');
 
         logger.info('Payment order created', {
             orderNumber: order.orderNumber,
@@ -87,6 +90,7 @@ const createPaymentOrder = async (orderId, userId) => {
             amount: order.totalAmount,
         });
 
+        console.log('DEBUG: Returning payment order info');
         return {
             paymentId: payment._id,
             razorpayOrderId: razorpayOrder.id,
