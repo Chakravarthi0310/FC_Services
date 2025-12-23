@@ -86,7 +86,7 @@ const deleteProduct = async (userId, productId) => {
  * @returns {Promise<QueryResult>}
  */
 const queryProducts = async (filter = {}) => {
-    return Product.find({ isActive: true, ...filter }).populate('category', 'name -_id');
+    return Product.find({ isActive: true, ...filter }).populate('category', 'name');
 };
 
 /**
