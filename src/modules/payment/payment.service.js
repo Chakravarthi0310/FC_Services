@@ -15,22 +15,18 @@ const config = require('../../config/env');
  * @returns {Promise<Object>}
  */
 const createPaymentOrder = async (orderId, userId) => {
-    console.log('[DEBUG] createPaymentOrder start:', { orderId, userId });
+    logger.info('Creating payment order', { orderId, userId });
 
     try {
         const order = await Order.findOne({ _id: orderId, userId });
 
         if (!order) {
-            console.log('[DEBUG] Order not found');
             throw new ApiError(404, 'Order not found');
         }
 
-        console.log('[DEBUG] Order found:', { status: order.status, orderNumber: order.orderNumber });
-
         // 1. If order is already PAID, return success immediately
         if (order.status === orderStatus.PAID) {
-            console.log('[DEBUG] Order status is PAID, checking for existing payment');
-            const existingPayment = await Payment.findOne({ orderId });
+            const existingPayment = await Payment.findOne({ orderId: order._id });
             const result = {
                 paymentId: existingPayment?._id,
                 razorpayOrderId: existingPayment?.providerOrderId,
@@ -40,24 +36,19 @@ const createPaymentOrder = async (orderId, userId) => {
                 orderNumber: order.orderNumber,
                 alreadyPaid: true,
             };
-            console.log('[DEBUG] Returning early for PAID order');
             return result;
         }
 
         // 2. Only allow payment for CREATED or PAYMENT_PENDING orders
         if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
-            console.log('[DEBUG] Invalid order status for payment:', order.status);
             throw new ApiError(400, `Cannot create payment for order with status: ${order.status}`);
         }
 
         // 3. Check if payment record already exists
-        console.log('[DEBUG] Checking for existing payment record');
-        const existingPayment = await Payment.findOne({ orderId });
+        const existingPayment = await Payment.findOne({ orderId: order._id });
         if (existingPayment) {
-            console.log('[DEBUG] Existing payment found:', { status: existingPayment.status });
             // If payment record is SUCCESS but order status wasn't PAID (desync), return success
             if (existingPayment.status === paymentStatus.SUCCESS) {
-                console.log('[DEBUG] Payment record is SUCCESS, returning alreadyPaid');
                 return {
                     paymentId: existingPayment._id,
                     razorpayOrderId: existingPayment.providerOrderId,
@@ -69,8 +60,7 @@ const createPaymentOrder = async (orderId, userId) => {
                 };
             }
 
-            console.log('[DEBUG] Returning existing pending payment');
-            // Return existing payment for retry/polling
+            // Return existing pending payment for retry/polling
             return {
                 paymentId: existingPayment._id,
                 razorpayOrderId: existingPayment.providerOrderId,
@@ -81,7 +71,6 @@ const createPaymentOrder = async (orderId, userId) => {
             };
         }
 
-        console.log('[DEBUG] Initializing new Razorpay order');
         // Create Razorpay order
         const razorpayOrder = await razorpay.orders.create({
             amount: Math.round(order.totalAmount * 100), // Convert to paise
@@ -92,23 +81,40 @@ const createPaymentOrder = async (orderId, userId) => {
                 orderNumber: order.orderNumber,
             },
         });
-        console.log('[DEBUG] Razorpay order created:', razorpayOrder.id);
 
-        console.log('[DEBUG] Creating DB payment record');
-        // Create payment record
-        const payment = await Payment.create({
-            orderId: order._id,
-            amount: order.totalAmount,
-            currency: 'INR',
-            providerOrderId: razorpayOrder.id,
-            status: paymentStatus.CREATED,
-        });
+        let payment;
+        try {
+            // Create payment record
+            payment = await Payment.create({
+                orderId: order._id,
+                amount: order.totalAmount,
+                currency: 'INR',
+                providerOrderId: razorpayOrder.id,
+                status: paymentStatus.CREATED,
+            });
+        } catch (dbError) {
+            // Handle race condition: another request or webhook created the payment record already
+            if (dbError.code === 11000 || (dbError.message && dbError.message.includes('E11000'))) {
+                logger.info('Duplicate payment caught (race condition). Resolving gracefully.', { orderId: order._id });
+                const racingPayment = await Payment.findOne({ orderId: order._id });
+                if (racingPayment) {
+                    return {
+                        paymentId: racingPayment._id,
+                        razorpayOrderId: racingPayment.providerOrderId,
+                        razorpayKeyId: config.RAZORPAY_KEY_ID,
+                        amount: Math.round(racingPayment.amount * 100),
+                        currency: racingPayment.currency,
+                        orderNumber: order.orderNumber,
+                        alreadyPaid: racingPayment.status === paymentStatus.SUCCESS,
+                    };
+                }
+            }
+            throw dbError;
+        }
 
-        console.log('[DEBUG] Updating order status to PAYMENT_PENDING');
         // Update order status to PAYMENT_PENDING
         order.status = orderStatus.PAYMENT_PENDING;
         await order.save();
-        console.log('[DEBUG] Order save() successful');
 
         return {
             paymentId: payment._id,
