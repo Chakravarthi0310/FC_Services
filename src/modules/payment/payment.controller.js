@@ -4,7 +4,7 @@ const createPaymentOrder = async (req, res, next) => {
     try {
         const { orderId } = req.body;
         const paymentOrder = await paymentService.createPaymentOrder(orderId, req.user._id);
-        res.status(201).json(paymentOrder);
+        res.status(201).json({ success: true, data: paymentOrder });
     } catch (error) {
         next(error);
     }
@@ -14,7 +14,7 @@ const handleWebhook = async (req, res, next) => {
     try {
         const webhookSignature = req.headers['x-razorpay-signature'];
         await paymentService.handleWebhook(req.body, webhookSignature);
-        res.json({ status: 'ok' });
+        res.json({ success: true, status: 'ok' });
     } catch (error) {
         next(error);
     }
@@ -24,7 +24,7 @@ const checkPaymentStatus = async (req, res, next) => {
     try {
         const { orderId } = req.params;
         const status = await paymentService.checkPaymentStatus(orderId, req.user._id);
-        res.json(status);
+        res.json({ success: true, data: status });
     } catch (error) {
         next(error);
     }
@@ -34,7 +34,7 @@ const verifyPayment = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
         const payment = await paymentService.verifyPayment(paymentId, req.body);
-        res.json({ success: true, payment });
+        res.json({ success: true, data: payment });
     } catch (error) {
         next(error);
     }
@@ -44,7 +44,7 @@ const getPaymentByOrderId = async (req, res, next) => {
     try {
         const { orderId } = req.params;
         const payment = await paymentService.getPaymentByOrderId(orderId, req.user._id);
-        res.json(payment);
+        res.json({ success: true, data: payment });
     } catch (error) {
         next(error);
     }

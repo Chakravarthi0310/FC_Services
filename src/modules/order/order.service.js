@@ -91,7 +91,7 @@ const createOrder = async (userId, deliveryAddress) => {
         const orderNumber = generateOrderNumber();
 
         // Create order
-        const order = await Order.create([{
+        const [order] = await Order.create([{
             orderNumber,
             userId,
             items: orderItems,
@@ -104,26 +104,32 @@ const createOrder = async (userId, deliveryAddress) => {
         await Cart.findOneAndUpdate({ userId }, { items: [] }, { session });
 
         await session.commitTransaction();
+        session.endSession(); // End session immediately after commit
 
         // Audit logging
         logger.info('Order created', {
             orderNumber,
             userId,
-            totalAmount: order[0].totalAmount,
+            totalAmount: order.totalAmount,
             itemCount: orderItems.length,
             inventoryChanges,
         });
 
-        return order[0].populate('items.farmerId', 'farmName');
+        // Return the created order, populated for the response (without session)
+        return Order.findById(order._id).populate('items.farmerId', 'farmName');
     } catch (error) {
-        await session.abortTransaction();
+        if (session.active) {
+            await session.abortTransaction();
+        }
         logger.error('Order creation failed', {
             userId,
             error: error.message,
         });
         throw error;
     } finally {
-        session.endSession();
+        if (session.active) {
+            session.endSession();
+        }
     }
 };
 
