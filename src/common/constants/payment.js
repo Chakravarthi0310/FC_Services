@@ -7,6 +7,7 @@ const paymentStatus = {
     CREATED: 'CREATED',
     SUCCESS: 'SUCCESS',
     FAILED: 'FAILED',
+    REFUNDED: 'REFUNDED',
 };
 
 module.exports = {

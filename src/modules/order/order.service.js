@@ -1,11 +1,14 @@
 const Order = require('./order.model');
 const Cart = require('../cart/cart.model');
 const Product = require('../product/product.model');
+const Payment = require('../payment/payment.model');
 const ApiError = require('../../common/errors/ApiError');
 const { orderStatus } = require('../../common/constants/order');
+const { paymentStatus } = require('../../common/constants/payment');
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../../common/utils/logger');
+const razorpay = require('../../config/razorpay');
 
 /**
  * Generate unique order number
@@ -125,7 +128,7 @@ const createOrder = async (userId, deliveryAddress) => {
 };
 
 /**
- * Cancel order and restore inventory
+ * Cancel order and restore inventory (with refund if paid)
  * @param {string} orderId
  * @param {string} userId
  * @returns {Promise<Order>}
@@ -141,9 +144,10 @@ const cancelOrder = async (orderId, userId) => {
             throw new ApiError(404, 'Order not found');
         }
 
-        // Only allow cancellation for CREATED or PAYMENT_PENDING orders
-        if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
-            throw new ApiError(400, `Cannot cancel order with status: ${order.status}`);
+        // REFUND RULE: Only allow cancellation before shipment
+        const cancellableStatuses = [orderStatus.CREATED, orderStatus.PAYMENT_PENDING, orderStatus.PAID];
+        if (!cancellableStatuses.includes(order.status)) {
+            throw new ApiError(400, `Cannot cancel order with status: ${order.status}. Order already shipped.`);
         }
 
         const inventoryRestorations = [];
@@ -164,6 +168,50 @@ const cancelOrder = async (orderId, userId) => {
             });
         }
 
+        // Handle refund if order was paid
+        let refundInfo = null;
+        if (order.status === orderStatus.PAID) {
+            const payment = await Payment.findOne({ orderId: order._id }).session(session);
+
+            if (payment && payment.status === paymentStatus.SUCCESS) {
+                try {
+                    // Initiate Razorpay refund
+                    const refund = await razorpay.payments.refund(payment.providerPaymentId, {
+                        amount: Math.round(payment.amount * 100), // Full refund in paise
+                        notes: {
+                            orderNumber: order.orderNumber,
+                            reason: 'Order cancelled by customer',
+                        },
+                    });
+
+                    // Update payment record with refund details
+                    payment.status = paymentStatus.REFUNDED;
+                    payment.refundId = refund.id;
+                    payment.refundAmount = payment.amount;
+                    payment.refundedAt = new Date();
+                    await payment.save({ session });
+
+                    refundInfo = {
+                        refundId: refund.id,
+                        amount: payment.amount,
+                    };
+
+                    logger.info('Refund initiated', {
+                        orderNumber: order.orderNumber,
+                        paymentId: payment._id,
+                        refundId: refund.id,
+                        amount: payment.amount,
+                    });
+                } catch (refundError) {
+                    logger.error('Refund initiation failed', {
+                        orderNumber: order.orderNumber,
+                        error: refundError.message,
+                    });
+                    // Don't block cancellation if refund fails - can be retried manually
+                }
+            }
+        }
+
         // Update order status
         order.status = orderStatus.CANCELLED;
         await order.save({ session });
@@ -175,6 +223,7 @@ const cancelOrder = async (orderId, userId) => {
             orderNumber: order.orderNumber,
             userId,
             inventoryRestorations,
+            refundInitiated: !!refundInfo,
         });
 
         return order;
