@@ -24,13 +24,8 @@ const createPaymentOrder = async (orderId, userId) => {
     // Check if payment already exists
     const existingPayment = await Payment.findOne({ orderId });
     if (existingPayment) {
-        // Allow retry if previous payment failed
-        if (existingPayment.status === paymentStatus.FAILED) {
-            logger.info('Retrying failed payment', {
-                paymentId: existingPayment._id,
-                orderId,
-            });
-            // Return existing payment for retry
+        // If it's already success, return success info
+        if (existingPayment.status === paymentStatus.SUCCESS) {
             return {
                 paymentId: existingPayment._id,
                 razorpayOrderId: existingPayment.providerOrderId,
@@ -38,9 +33,25 @@ const createPaymentOrder = async (orderId, userId) => {
                 amount: Math.round(existingPayment.amount * 100),
                 currency: existingPayment.currency,
                 orderNumber: order.orderNumber,
+                alreadyPaid: true,
             };
         }
-        throw new ApiError(400, 'Payment already initiated for this order');
+
+        logger.info('Returning existing payment order', {
+            paymentId: existingPayment._id,
+            orderId,
+            status: existingPayment.status,
+        });
+
+        // Return existing payment for retry/polling
+        return {
+            paymentId: existingPayment._id,
+            razorpayOrderId: existingPayment.providerOrderId,
+            razorpayKeyId: config.RAZORPAY_KEY_ID,
+            amount: Math.round(existingPayment.amount * 100),
+            currency: existingPayment.currency,
+            orderNumber: order.orderNumber,
+        };
     }
 
     // Only allow payment for CREATED or PAYMENT_PENDING orders

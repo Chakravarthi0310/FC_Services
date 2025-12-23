@@ -51,12 +51,20 @@ const paymentSchema = new mongoose.Schema({
 
 // Payment is immutable after SUCCESS (except for refunds)
 paymentSchema.pre('save', async function () {
-    if (this.isModified() && !this.isNew && this.status === paymentStatus.SUCCESS) {
-        // Allow transition to REFUNDED
-        if (this.isModified('status') && this.status === paymentStatus.REFUNDED) {
-            return;
+    if (this.isNew) return;
+
+    // We only care if the document is being modified
+    if (this.isModified()) {
+        // Fetch the current state from the database to check if it WAS already success
+        const currentDoc = await this.constructor.findById(this._id).lean();
+
+        if (currentDoc && currentDoc.status === paymentStatus.SUCCESS) {
+            // Already success. Only allow transition to REFUNDED
+            if (this.isModified('status') && this.status === paymentStatus.REFUNDED) {
+                return;
+            }
+            throw new Error('Cannot modify payment after SUCCESS');
         }
-        throw new Error('Cannot modify payment after SUCCESS');
     }
 });
 
