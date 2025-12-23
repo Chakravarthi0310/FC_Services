@@ -10,6 +10,16 @@ const createPaymentOrder = async (req, res, next) => {
     }
 };
 
+const handleWebhook = async (req, res, next) => {
+    try {
+        const webhookSignature = req.headers['x-razorpay-signature'];
+        await paymentService.handleWebhook(req.body, webhookSignature);
+        res.json({ status: 'ok' });
+    } catch (error) {
+        next(error);
+    }
+};
+
 const verifyPayment = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
@@ -32,6 +42,7 @@ const getPaymentByOrderId = async (req, res, next) => {
 
 module.exports = {
     createPaymentOrder,
+    handleWebhook,
     verifyPayment,
     getPaymentByOrderId,
 };

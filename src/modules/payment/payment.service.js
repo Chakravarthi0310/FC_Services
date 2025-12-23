@@ -6,6 +6,7 @@ const { paymentStatus } = require('../../common/constants/payment');
 const { orderStatus } = require('../../common/constants/order');
 const crypto = require('crypto');
 const logger = require('../../common/utils/logger');
+const config = require('../../config/env');
 
 /**
  * Create Razorpay order for payment
@@ -66,6 +67,7 @@ const createPaymentOrder = async (orderId, userId) => {
         return {
             paymentId: payment._id,
             razorpayOrderId: razorpayOrder.id,
+            razorpayKeyId: config.RAZORPAY_KEY_ID,
             amount: razorpayOrder.amount,
             currency: razorpayOrder.currency,
             orderNumber: order.orderNumber,
@@ -80,7 +82,95 @@ const createPaymentOrder = async (orderId, userId) => {
 };
 
 /**
- * Verify Razorpay payment signature
+ * Handle Razorpay webhook (CRITICAL - Production Payment Verification)
+ * @param {Object} webhookBody
+ * @param {string} webhookSignature
+ * @returns {Promise<void>}
+ */
+const handleWebhook = async (webhookBody, webhookSignature) => {
+    // Verify webhook signature
+    const expectedSignature = crypto
+        .createHmac('sha256', config.RAZORPAY_KEY_SECRET)
+        .update(JSON.stringify(webhookBody))
+        .digest('hex');
+
+    if (expectedSignature !== webhookSignature) {
+        logger.warn('Webhook signature verification failed', {
+            receivedSignature: webhookSignature,
+        });
+        throw new ApiError(400, 'Invalid webhook signature');
+    }
+
+    const event = webhookBody.event;
+    const paymentEntity = webhookBody.payload?.payment?.entity;
+
+    logger.info('Webhook received', {
+        event,
+        paymentId: paymentEntity?.id,
+    });
+
+    // Handle payment.authorized event
+    if (event === 'payment.authorized' || event === 'payment.captured') {
+        const razorpayPaymentId = paymentEntity.id;
+        const razorpayOrderId = paymentEntity.order_id;
+
+        // Find payment by providerOrderId (idempotent - safe for duplicate webhooks)
+        const payment = await Payment.findOne({ providerOrderId: razorpayOrderId });
+
+        if (!payment) {
+            logger.warn('Payment not found for webhook', {
+                razorpayOrderId,
+                razorpayPaymentId,
+            });
+            return; // Silently ignore - might be a test webhook
+        }
+
+        // Idempotency check - if already SUCCESS, skip
+        if (payment.status === paymentStatus.SUCCESS) {
+            logger.info('Payment already marked as SUCCESS (idempotent)', {
+                paymentId: payment._id,
+                razorpayPaymentId,
+            });
+            return;
+        }
+
+        // Update payment record
+        payment.providerPaymentId = razorpayPaymentId;
+        payment.status = paymentStatus.SUCCESS;
+        await payment.save();
+
+        // Update order status to PAID
+        const order = await Order.findById(payment.orderId);
+        if (order) {
+            order.status = orderStatus.PAID;
+            order.paymentStatus = 'COMPLETED';
+            await order.save();
+
+            logger.info('Payment verified via webhook', {
+                paymentId: payment._id,
+                orderNumber: order.orderNumber,
+                razorpayPaymentId,
+            });
+        }
+    } else if (event === 'payment.failed') {
+        const razorpayOrderId = paymentEntity.order_id;
+        const payment = await Payment.findOne({ providerOrderId: razorpayOrderId });
+
+        if (payment && payment.status !== paymentStatus.FAILED) {
+            payment.status = paymentStatus.FAILED;
+            await payment.save();
+
+            logger.warn('Payment failed via webhook', {
+                paymentId: payment._id,
+                razorpayPaymentId: paymentEntity.id,
+            });
+        }
+    }
+};
+
+/**
+ * Verify Razorpay payment signature (DEPRECATED - Use webhook for production)
+ * This is kept for backward compatibility but webhooks are the secure method
  * @param {string} paymentId
  * @param {Object} paymentData
  * @returns {Promise<Payment>}
@@ -99,7 +189,7 @@ const verifyPayment = async (paymentId, paymentData) => {
 
     // Verify signature
     const generatedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .createHmac('sha256', config.RAZORPAY_KEY_SECRET)
         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
         .digest('hex');
 
@@ -127,7 +217,7 @@ const verifyPayment = async (paymentId, paymentData) => {
     order.paymentStatus = 'COMPLETED';
     await order.save();
 
-    logger.info('Payment verified successfully', {
+    logger.info('Payment verified successfully (frontend method)', {
         paymentId,
         orderNumber: order.orderNumber,
         razorpayPaymentId: razorpay_payment_id,
@@ -158,6 +248,7 @@ const getPaymentByOrderId = async (orderId, userId) => {
 
 module.exports = {
     createPaymentOrder,
+    handleWebhook,
     verifyPayment,
     getPaymentByOrderId,
 };
