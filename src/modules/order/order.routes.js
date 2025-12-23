@@ -31,7 +31,23 @@ router.get(
     orderController.getOrderById
 );
 
-// Admin routes for status updates
+// Cancel order (Customer only)
+router.post(
+    '/:orderId/cancel',
+    authenticate,
+    authorize(roles.CUSTOMER),
+    validate(orderValidation.getOrder),
+    orderController.cancelOrder
+);
+
+// Admin routes
+router.get(
+    '/admin/all',
+    authenticate,
+    authorize(roles.ADMIN),
+    orderController.getAllOrders
+);
+
 router.patch(
     '/:orderId/status',
     authenticate,

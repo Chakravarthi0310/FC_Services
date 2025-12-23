@@ -38,9 +38,31 @@ const updateOrderStatus = async (req, res, next) => {
     }
 };
 
+const cancelOrder = async (req, res, next) => {
+    try {
+        const order = await orderService.cancelOrder(req.params.orderId, req.user._id);
+        res.json(order);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Admin-only: Get all orders with optional status filter
+const getAllOrders = async (req, res, next) => {
+    try {
+        const { status } = req.query;
+        const orders = await orderService.getAllOrders(status);
+        res.json(orders);
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createOrder,
     getUserOrders,
     getOrderById,
     updateOrderStatus,
+    cancelOrder,
+    getAllOrders,
 };
