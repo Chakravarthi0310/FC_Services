@@ -15,37 +15,62 @@ const config = require('../../config/env');
  * @returns {Promise<Object>}
  */
 const createPaymentOrder = async (orderId, userId) => {
-    console.log('--- PAYMENT SERVICE: createPaymentOrder started', { orderId, userId });
-    const order = await Order.findOne({ _id: orderId, userId });
+    console.log('[DEBUG] createPaymentOrder start:', { orderId, userId });
 
-    if (!order) {
-        throw new ApiError(404, 'Order not found');
-    }
+    try {
+        const order = await Order.findOne({ _id: orderId, userId });
 
-    // 1. If order is already PAID, return success immediately
-    if (order.status === orderStatus.PAID) {
+        if (!order) {
+            console.log('[DEBUG] Order not found');
+            throw new ApiError(404, 'Order not found');
+        }
+
+        console.log('[DEBUG] Order found:', { status: order.status, orderNumber: order.orderNumber });
+
+        // 1. If order is already PAID, return success immediately
+        if (order.status === orderStatus.PAID) {
+            console.log('[DEBUG] Order status is PAID, checking for existing payment');
+            const existingPayment = await Payment.findOne({ orderId });
+            const result = {
+                paymentId: existingPayment?._id,
+                razorpayOrderId: existingPayment?.providerOrderId,
+                razorpayKeyId: config.RAZORPAY_KEY_ID,
+                amount: Math.round((existingPayment?.amount || order.totalAmount) * 100),
+                currency: existingPayment?.currency || 'INR',
+                orderNumber: order.orderNumber,
+                alreadyPaid: true,
+            };
+            console.log('[DEBUG] Returning early for PAID order');
+            return result;
+        }
+
+        // 2. Only allow payment for CREATED or PAYMENT_PENDING orders
+        if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
+            console.log('[DEBUG] Invalid order status for payment:', order.status);
+            throw new ApiError(400, `Cannot create payment for order with status: ${order.status}`);
+        }
+
+        // 3. Check if payment record already exists
+        console.log('[DEBUG] Checking for existing payment record');
         const existingPayment = await Payment.findOne({ orderId });
-        return {
-            paymentId: existingPayment?._id,
-            razorpayOrderId: existingPayment?.providerOrderId,
-            razorpayKeyId: config.RAZORPAY_KEY_ID,
-            amount: Math.round((existingPayment?.amount || order.totalAmount) * 100),
-            currency: existingPayment?.currency || 'INR',
-            orderNumber: order.orderNumber,
-            alreadyPaid: true,
-        };
-    }
+        if (existingPayment) {
+            console.log('[DEBUG] Existing payment found:', { status: existingPayment.status });
+            // If payment record is SUCCESS but order status wasn't PAID (desync), return success
+            if (existingPayment.status === paymentStatus.SUCCESS) {
+                console.log('[DEBUG] Payment record is SUCCESS, returning alreadyPaid');
+                return {
+                    paymentId: existingPayment._id,
+                    razorpayOrderId: existingPayment.providerOrderId,
+                    razorpayKeyId: config.RAZORPAY_KEY_ID,
+                    amount: Math.round(existingPayment.amount * 100),
+                    currency: existingPayment.currency,
+                    orderNumber: order.orderNumber,
+                    alreadyPaid: true,
+                };
+            }
 
-    // 2. Only allow payment for CREATED or PAYMENT_PENDING orders
-    if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
-        throw new ApiError(400, `Cannot create payment for order with status: ${order.status}`);
-    }
-
-    // 3. Check if payment record already exists
-    const existingPayment = await Payment.findOne({ orderId });
-    if (existingPayment) {
-        // If payment record is SUCCESS but order status wasn't PAID (desync), return success
-        if (existingPayment.status === paymentStatus.SUCCESS) {
+            console.log('[DEBUG] Returning existing pending payment');
+            // Return existing payment for retry/polling
             return {
                 paymentId: existingPayment._id,
                 razorpayOrderId: existingPayment.providerOrderId,
@@ -53,28 +78,10 @@ const createPaymentOrder = async (orderId, userId) => {
                 amount: Math.round(existingPayment.amount * 100),
                 currency: existingPayment.currency,
                 orderNumber: order.orderNumber,
-                alreadyPaid: true,
             };
         }
 
-        logger.info('Returning existing pending payment order', {
-            paymentId: existingPayment._id,
-            orderId,
-            status: existingPayment.status,
-        });
-
-        // Return existing payment for retry/polling
-        return {
-            paymentId: existingPayment._id,
-            razorpayOrderId: existingPayment.providerOrderId,
-            razorpayKeyId: config.RAZORPAY_KEY_ID,
-            amount: Math.round(existingPayment.amount * 100),
-            currency: existingPayment.currency,
-            orderNumber: order.orderNumber,
-        };
-    }
-
-    try {
+        console.log('[DEBUG] Initializing new Razorpay order');
         // Create Razorpay order
         const razorpayOrder = await razorpay.orders.create({
             amount: Math.round(order.totalAmount * 100), // Convert to paise
@@ -85,7 +92,9 @@ const createPaymentOrder = async (orderId, userId) => {
                 orderNumber: order.orderNumber,
             },
         });
+        console.log('[DEBUG] Razorpay order created:', razorpayOrder.id);
 
+        console.log('[DEBUG] Creating DB payment record');
         // Create payment record
         const payment = await Payment.create({
             orderId: order._id,
@@ -95,18 +104,11 @@ const createPaymentOrder = async (orderId, userId) => {
             status: paymentStatus.CREATED,
         });
 
+        console.log('[DEBUG] Updating order status to PAYMENT_PENDING');
         // Update order status to PAYMENT_PENDING
         order.status = orderStatus.PAYMENT_PENDING;
-        console.log('--- PAYMENT SERVICE: Calling order.save()');
         await order.save();
-        console.log('--- PAYMENT SERVICE: order.save() successful');
-
-        logger.info('Payment order created', {
-            orderNumber: order.orderNumber,
-            paymentId: payment._id,
-            razorpayOrderId: razorpayOrder.id,
-            amount: order.totalAmount,
-        });
+        console.log('[DEBUG] Order save() successful');
 
         return {
             paymentId: payment._id,
@@ -117,14 +119,13 @@ const createPaymentOrder = async (orderId, userId) => {
             orderNumber: order.orderNumber,
         };
     } catch (error) {
-        console.error('!!! PAYMENT SERVICE ERROR:', {
+        console.error('!!! createPaymentOrder FATAL ERROR:', {
             name: error.name,
             message: error.message,
             stack: error.stack,
             statusCode: error.statusCode
         });
 
-        // Robust check for ApiError or similar structured errors
         if (error.statusCode && error.statusCode < 500) {
             throw error;
         }
@@ -133,18 +134,17 @@ const createPaymentOrder = async (orderId, userId) => {
             throw error;
         }
 
+        // If it's a Mongoose CastError, return 400
+        if (error.name === 'CastError') {
+            throw new ApiError(400, `Invalid ID: ${error.value}`);
+        }
+
         logger.error('Payment order creation failed', {
             orderId,
             error: error.message,
             stack: error.stack,
         });
 
-        // If it's a CastError or similar, it's a 400 not a 500
-        if (error.name === 'CastError') {
-            throw new ApiError(400, `Invalid ID format: ${error.value}`);
-        }
-
-        // Expose error message for debugging
         throw new ApiError(500, `Payment initialization failed: ${error.message}`);
     }
 };
