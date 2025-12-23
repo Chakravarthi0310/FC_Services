@@ -49,8 +49,9 @@ const createPaymentOrder = async (orderId, userId) => {
     }
 
     try {
-        logger.debug('Creating Razorpay order', {
+        console.log('Razorpay: Creating order with', {
             amount: Math.round(order.totalAmount * 100),
+            currency: 'INR',
             receipt: order.orderNumber,
         });
 
@@ -64,6 +65,7 @@ const createPaymentOrder = async (orderId, userId) => {
                 orderNumber: order.orderNumber,
             },
         });
+        console.log('Razorpay: Order created successfully', { razorpayOrderId: razorpayOrder.id });
 
         // Create payment record
         const payment = await Payment.create({
