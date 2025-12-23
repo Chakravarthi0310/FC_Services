@@ -24,6 +24,13 @@ router.post(
     paymentController.createPaymentOrder
 );
 
+// Check payment status (for polling in case of webhook delay)
+router.get(
+    '/status/:orderId',
+    validate(paymentValidation.getPayment),
+    paymentController.checkPaymentStatus
+);
+
 // Verify payment (DEPRECATED - use webhook for production)
 router.post(
     '/:paymentId/verify',

@@ -20,6 +20,16 @@ const handleWebhook = async (req, res, next) => {
     }
 };
 
+const checkPaymentStatus = async (req, res, next) => {
+    try {
+        const { orderId } = req.params;
+        const status = await paymentService.checkPaymentStatus(orderId, req.user._id);
+        res.json(status);
+    } catch (error) {
+        next(error);
+    }
+};
+
 const verifyPayment = async (req, res, next) => {
     try {
         const { paymentId } = req.params;
@@ -43,6 +53,7 @@ const getPaymentByOrderId = async (req, res, next) => {
 module.exports = {
     createPaymentOrder,
     handleWebhook,
+    checkPaymentStatus,
     verifyPayment,
     getPaymentByOrderId,
 };
