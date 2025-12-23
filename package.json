@@ -30,6 +30,7 @@
     "http-status": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.2",
+    "uuid": "^13.0.0",
     "winston": "^3.19.0",
     "zod": "^4.2.1"
   }

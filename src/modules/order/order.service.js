@@ -4,6 +4,18 @@ const Product = require('../product/product.model');
 const ApiError = require('../../common/errors/ApiError');
 const { orderStatus } = require('../../common/constants/order');
 const mongoose = require('mongoose');
+const { v4: uuidv4 } = require('uuid');
+const logger = require('../../common/utils/logger');
+
+/**
+ * Generate unique order number
+ * @returns {string}
+ */
+const generateOrderNumber = () => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = uuidv4().split('-')[0].toUpperCase();
+    return `ORD-${timestamp}-${random}`;
+};
 
 /**
  * Create order from cart with atomic inventory deduction
@@ -25,6 +37,7 @@ const createOrder = async (userId, deliveryAddress) => {
         // Prepare order items with product snapshots
         const orderItems = [];
         let totalAmount = 0;
+        const inventoryChanges = [];
 
         for (const cartItem of cart.items) {
             // Re-fetch product with session lock
@@ -50,6 +63,15 @@ const createOrder = async (userId, deliveryAddress) => {
                 throw new ApiError(400, `Race condition detected: Insufficient stock for ${product.name}`);
             }
 
+            // Track inventory changes for logging
+            inventoryChanges.push({
+                productId: product._id,
+                productName: product.name,
+                previousStock: product.stock,
+                newStock: updatedProduct.stock,
+                quantityDeducted: cartItem.quantity,
+            });
+
             // Create order item snapshot
             orderItems.push({
                 productId: product._id,
@@ -62,8 +84,12 @@ const createOrder = async (userId, deliveryAddress) => {
             totalAmount += product.price * cartItem.quantity;
         }
 
+        // Generate unique order number
+        const orderNumber = generateOrderNumber();
+
         // Create order
         const order = await Order.create([{
+            orderNumber,
             userId,
             items: orderItems,
             totalAmount: Number(totalAmount.toFixed(2)),
@@ -75,9 +101,23 @@ const createOrder = async (userId, deliveryAddress) => {
         await Cart.findOneAndUpdate({ userId }, { items: [] }, { session });
 
         await session.commitTransaction();
+
+        // Audit logging
+        logger.info('Order created', {
+            orderNumber,
+            userId,
+            totalAmount: order[0].totalAmount,
+            itemCount: orderItems.length,
+            inventoryChanges,
+        });
+
         return order[0].populate('items.farmerId', 'farmName');
     } catch (error) {
         await session.abortTransaction();
+        logger.error('Order creation failed', {
+            userId,
+            error: error.message,
+        });
         throw error;
     } finally {
         session.endSession();
@@ -106,13 +146,22 @@ const cancelOrder = async (orderId, userId) => {
             throw new ApiError(400, `Cannot cancel order with status: ${order.status}`);
         }
 
+        const inventoryRestorations = [];
+
         // Restore inventory atomically
         for (const item of order.items) {
-            await Product.findByIdAndUpdate(
+            const updatedProduct = await Product.findByIdAndUpdate(
                 item.productId,
                 { $inc: { stock: item.quantity } },
-                { session }
+                { new: true, session }
             );
+
+            inventoryRestorations.push({
+                productId: item.productId,
+                productName: item.name,
+                quantityRestored: item.quantity,
+                newStock: updatedProduct.stock,
+            });
         }
 
         // Update order status
@@ -120,9 +169,22 @@ const cancelOrder = async (orderId, userId) => {
         await order.save({ session });
 
         await session.commitTransaction();
+
+        // Audit logging
+        logger.info('Order cancelled', {
+            orderNumber: order.orderNumber,
+            userId,
+            inventoryRestorations,
+        });
+
         return order;
     } catch (error) {
         await session.abortTransaction();
+        logger.error('Order cancellation failed', {
+            orderId,
+            userId,
+            error: error.message,
+        });
         throw error;
     } finally {
         session.endSession();
@@ -164,9 +226,28 @@ const updateOrderStatus = async (orderId, newStatus) => {
         throw new ApiError(404, 'Order not found');
     }
 
+    const previousStatus = order.status;
     order.status = newStatus;
     await order.save();
+
+    // Audit logging
+    logger.info('Order status updated', {
+        orderNumber: order.orderNumber,
+        previousStatus,
+        newStatus,
+    });
+
     return order;
+};
+
+/**
+ * Get all orders (Admin only) with optional status filter
+ * @param {string} status - Optional status filter
+ * @returns {Promise<Order[]>}
+ */
+const getAllOrders = async (status) => {
+    const filter = status ? { status } : {};
+    return Order.find(filter).sort({ createdAt: -1 }).populate('userId', 'name email');
 };
 
 module.exports = {
@@ -175,4 +256,5 @@ module.exports = {
     getUserOrders,
     getOrderById,
     updateOrderStatus,
+    getAllOrders,
 };
