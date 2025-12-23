@@ -50,16 +50,14 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Payment is immutable after SUCCESS (except for refunds)
-paymentSchema.pre('save', function (next) {
+paymentSchema.pre('save', async function () {
     if (this.isModified() && !this.isNew && this.status === paymentStatus.SUCCESS) {
         // Allow transition to REFUNDED
         if (this.isModified('status') && this.status === paymentStatus.REFUNDED) {
-            return next();
+            return;
         }
-        const error = new Error('Cannot modify payment after SUCCESS');
-        return next(error);
+        throw new Error('Cannot modify payment after SUCCESS');
     }
-    next();
 });
 
 const Payment = mongoose.model('Payment', paymentSchema);
