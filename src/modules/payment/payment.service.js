@@ -15,6 +15,7 @@ const config = require('../../config/env');
  * @returns {Promise<Object>}
  */
 const createPaymentOrder = async (orderId, userId) => {
+    console.log('--- PAYMENT SERVICE: createPaymentOrder started', { orderId, userId });
     const order = await Order.findOne({ _id: orderId, userId });
 
     if (!order) {
@@ -96,7 +97,9 @@ const createPaymentOrder = async (orderId, userId) => {
 
         // Update order status to PAYMENT_PENDING
         order.status = orderStatus.PAYMENT_PENDING;
+        console.log('--- PAYMENT SERVICE: Calling order.save()');
         await order.save();
+        console.log('--- PAYMENT SERVICE: order.save() successful');
 
         logger.info('Payment order created', {
             orderNumber: order.orderNumber,
@@ -114,6 +117,18 @@ const createPaymentOrder = async (orderId, userId) => {
             orderNumber: order.orderNumber,
         };
     } catch (error) {
+        console.error('!!! PAYMENT SERVICE ERROR:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            statusCode: error.statusCode
+        });
+
+        // Robust check for ApiError or similar structured errors
+        if (error.statusCode && error.statusCode < 500) {
+            throw error;
+        }
+
         if (error instanceof ApiError) {
             throw error;
         }
@@ -123,6 +138,12 @@ const createPaymentOrder = async (orderId, userId) => {
             error: error.message,
             stack: error.stack,
         });
+
+        // If it's a CastError or similar, it's a 400 not a 500
+        if (error.name === 'CastError') {
+            throw new ApiError(400, `Invalid ID format: ${error.value}`);
+        }
+
         // Expose error message for debugging
         throw new ApiError(500, `Payment initialization failed: ${error.message}`);
     }

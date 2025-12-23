@@ -1,11 +1,19 @@
 const paymentService = require('./payment.service');
 
 const createPaymentOrder = async (req, res, next) => {
+    console.log('>>> PAYMENT CONTROLLER: Received request for order:', req.body.orderId);
     try {
         const { orderId } = req.body;
         const paymentOrder = await paymentService.createPaymentOrder(orderId, req.user._id);
+        console.log('<<< PAYMENT CONTROLLER: Responding with success');
         res.status(201).json({ success: true, data: paymentOrder });
     } catch (error) {
+        console.error('!!! PAYMENT CONTROLLER ERROR:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            isApiError: error instanceof ApiError
+        });
         next(error);
     }
 };
