@@ -2,6 +2,7 @@ const Product = require('./product.model');
 const Farmer = require('../farmer/farmer.model');
 const ApiError = require('../../common/errors/ApiError');
 const { farmerVerificationStatus } = require('../../common/constants/farmer');
+const { generatePresignedUrl } = require('../../common/utils/s3');
 
 /**
  * Create a new product
@@ -84,9 +85,9 @@ const deleteProduct = async (userId, productId) => {
  * @param {Object} filter
  * @returns {Promise<QueryResult>}
  */
-const { generatePresignedUrl } = require('../../common/utils/s3');
-
-// ... existing code ...
+const queryProducts = async (filter = {}) => {
+    return Product.find({ isActive: true, ...filter }).populate('category', 'name -_id');
+};
 
 /**
  * Generate a presigned upload URL for a product image
@@ -121,7 +122,8 @@ const generateUploadUrl = async (userId, productId, contentType) => {
     const key = `products/${farmer._id}/${product._id}/image-${timestamp}.${extension}`;
 
     const uploadUrl = await generatePresignedUrl(key, contentType);
-    const imageUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    const config = require('../../config/env');
+    const imageUrl = `https://${config.AWS_S3_BUCKET_NAME}.s3.${config.AWS_REGION}.amazonaws.com/${key}`;
 
     return { uploadUrl, imageUrl };
 };
