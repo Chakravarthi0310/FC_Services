@@ -49,6 +49,11 @@ const createPaymentOrder = async (orderId, userId) => {
     }
 
     try {
+        logger.debug('Creating Razorpay order', {
+            amount: Math.round(order.totalAmount * 100),
+            receipt: order.orderNumber,
+        });
+
         // Create Razorpay order
         const razorpayOrder = await razorpay.orders.create({
             amount: Math.round(order.totalAmount * 100), // Convert to paise
@@ -92,8 +97,10 @@ const createPaymentOrder = async (orderId, userId) => {
         logger.error('Payment order creation failed', {
             orderId,
             error: error.message,
+            stack: error.stack,
         });
-        throw new ApiError(500, 'Failed to create payment order');
+        // Expose error message for debugging
+        throw new ApiError(500, `Payment initialization failed: ${error.message}`);
     }
 };
 
