@@ -49,21 +49,31 @@ const paymentSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-// Payment is immutable after SUCCESS (except for refunds)
+// Payment is immutable after SUCCESS (except for refunds and filling missing provider info)
 paymentSchema.pre('save', async function () {
     if (this.isNew) return;
 
-    // We only care if the document is being modified
     if (this.isModified()) {
-        // Fetch the current state from the database to check if it WAS already success
         const currentDoc = await this.constructor.findById(this._id).lean();
 
         if (currentDoc && currentDoc.status === paymentStatus.SUCCESS) {
-            // Already success. Only allow transition to REFUNDED
+            // Already success. 
+            // 1. Allow transition to REFUNDED
             if (this.isModified('status') && this.status === paymentStatus.REFUNDED) {
                 return;
             }
-            throw new Error('Cannot modify payment after SUCCESS');
+
+            // 2. Allow filling in MISSING provider info (signature/id) if they weren't set
+            const isFillingMissingInfo =
+                (this.isModified('providerSignature') && !currentDoc.providerSignature) ||
+                (this.isModified('providerPaymentId') && !currentDoc.providerPaymentId);
+
+            if (isFillingMissingInfo && !this.isModified('amount') && !this.isModified('orderId')) {
+                return;
+            }
+
+            // Otherwise, block any changes to a successful payment sensitive data
+            throw new Error('Cannot modify sensitive payment data after SUCCESS');
         }
     }
 });

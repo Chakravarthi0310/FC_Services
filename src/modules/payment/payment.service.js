@@ -21,10 +21,29 @@ const createPaymentOrder = async (orderId, userId) => {
         throw new ApiError(404, 'Order not found');
     }
 
-    // Check if payment already exists
+    // 1. If order is already PAID, return success immediately
+    if (order.status === orderStatus.PAID) {
+        const existingPayment = await Payment.findOne({ orderId });
+        return {
+            paymentId: existingPayment?._id,
+            razorpayOrderId: existingPayment?.providerOrderId,
+            razorpayKeyId: config.RAZORPAY_KEY_ID,
+            amount: Math.round((existingPayment?.amount || order.totalAmount) * 100),
+            currency: existingPayment?.currency || 'INR',
+            orderNumber: order.orderNumber,
+            alreadyPaid: true,
+        };
+    }
+
+    // 2. Only allow payment for CREATED or PAYMENT_PENDING orders
+    if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
+        throw new ApiError(400, `Cannot create payment for order with status: ${order.status}`);
+    }
+
+    // 3. Check if payment record already exists
     const existingPayment = await Payment.findOne({ orderId });
     if (existingPayment) {
-        // If it's already success, return success info
+        // If payment record is SUCCESS but order status wasn't PAID (desync), return success
         if (existingPayment.status === paymentStatus.SUCCESS) {
             return {
                 paymentId: existingPayment._id,
@@ -37,7 +56,7 @@ const createPaymentOrder = async (orderId, userId) => {
             };
         }
 
-        logger.info('Returning existing payment order', {
+        logger.info('Returning existing pending payment order', {
             paymentId: existingPayment._id,
             orderId,
             status: existingPayment.status,
@@ -52,11 +71,6 @@ const createPaymentOrder = async (orderId, userId) => {
             currency: existingPayment.currency,
             orderNumber: order.orderNumber,
         };
-    }
-
-    // Only allow payment for CREATED or PAYMENT_PENDING orders
-    if (![orderStatus.CREATED, orderStatus.PAYMENT_PENDING].includes(order.status)) {
-        throw new ApiError(400, `Cannot create payment for order with status: ${order.status}`);
     }
 
     try {
@@ -100,6 +114,10 @@ const createPaymentOrder = async (orderId, userId) => {
             orderNumber: order.orderNumber,
         };
     } catch (error) {
+        if (error instanceof ApiError) {
+            throw error;
+        }
+
         logger.error('Payment order creation failed', {
             orderId,
             error: error.message,
