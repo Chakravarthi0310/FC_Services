@@ -34,6 +34,14 @@ const userSchema = mongoose.Schema(
             enum: statusNames,
             default: status.ACTIVE,
         },
+        loginAttempts: {
+            type: Number,
+            required: true,
+            default: 0,
+        },
+        lockUntil: {
+            type: Number,
+        },
     },
     {
         timestamps: true,

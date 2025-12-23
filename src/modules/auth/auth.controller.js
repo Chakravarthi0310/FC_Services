@@ -1,4 +1,3 @@
-const httpStatus = require('http-status');
 const authService = require('./auth.service');
 const tokenService = require('./token.service');
 
@@ -11,7 +10,7 @@ const register = async (req, res, next) => {
         const userResponse = user.toObject();
         delete userResponse.password;
 
-        res.status(httpStatus.CREATED).send({ user: userResponse, token });
+        res.status(201).send({ user: userResponse, token });
     } catch (error) {
         next(error);
     }
