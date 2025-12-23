@@ -299,6 +299,31 @@ const getAllOrders = async (status) => {
     return Order.find(filter).sort({ createdAt: -1 }).populate('userId', 'name email');
 };
 
+/**
+ * Get orders containing farmer's products
+ * @param {string} userId - Farmer's user ID
+ * @returns {Promise<Order[]>}
+ */
+const getFarmerOrders = async (userId) => {
+    const Farmer = require('../farmer/farmer.model');
+
+    // Get farmer profile
+    const farmer = await Farmer.findOne({ userId });
+    if (!farmer) {
+        throw new ApiError(404, 'Farmer profile not found');
+    }
+
+    // Find orders that contain items from this farmer
+    const orders = await Order.find({
+        'items.farmerId': farmer._id
+    })
+        .sort({ createdAt: -1 })
+        .populate('userId', 'name email')
+        .populate('items.productId', 'name images');
+
+    return orders;
+};
+
 module.exports = {
     createOrder,
     cancelOrder,
@@ -306,4 +331,5 @@ module.exports = {
     getOrderById,
     updateOrderStatus,
     getAllOrders,
+    getFarmerOrders,
 };

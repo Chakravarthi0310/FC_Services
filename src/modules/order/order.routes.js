@@ -56,4 +56,12 @@ router.patch(
     orderController.updateOrderStatus
 );
 
+// Farmer routes
+router.get(
+    '/farmer/orders',
+    authenticate,
+    authorize(roles.FARMER),
+    orderController.getFarmerOrders
+);
+
 module.exports = router;

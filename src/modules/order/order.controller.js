@@ -52,7 +52,17 @@ const getAllOrders = async (req, res, next) => {
     try {
         const { status } = req.query;
         const orders = await orderService.getAllOrders(status);
-        res.json(orders);
+        res.json({ success: true, data: orders });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Farmer-only: Get orders containing farmer's products
+const getFarmerOrders = async (req, res, next) => {
+    try {
+        const orders = await orderService.getFarmerOrders(req.user._id);
+        res.json({ success: true, data: orders });
     } catch (error) {
         next(error);
     }
@@ -65,4 +75,5 @@ module.exports = {
     updateOrderStatus,
     cancelOrder,
     getAllOrders,
+    getFarmerOrders,
 };
