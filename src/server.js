@@ -1,12 +1,16 @@
 const app = require('./app');
 const config = require('./config/env');
 const connectDB = require('./config/db');
+const seedCategories = require('./config/seed');
 const logger = require('./common/utils/logger');
 
 const startServer = async () => {
     try {
         // Connect to Database
         await connectDB();
+
+        // Seed initial data
+        await seedCategories();
 
         // Start Express Server
         const server = app.listen(config.PORT, () => {
