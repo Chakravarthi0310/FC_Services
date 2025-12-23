@@ -13,7 +13,15 @@ router
     .post(authenticate, authorize(roles.FARMER), validate(farmerValidation.createProfile), farmerController.createProfile)
     .get(authenticate, authorize(roles.FARMER), farmerController.getMyProfile);
 
-// Admin-only verification
+// Admin-only routes
+router
+    .route('/admin/all')
+    .get(authenticate, authorize(roles.ADMIN), farmerController.getAllFarmers);
+
+router
+    .route('/admin/pending')
+    .get(authenticate, authorize(roles.ADMIN), farmerController.getPendingFarmers);
+
 router
     .route('/verify/:userId')
     .patch(authenticate, authorize(roles.ADMIN), validate(farmerValidation.verifyFarmer), farmerController.verifyFarmer);

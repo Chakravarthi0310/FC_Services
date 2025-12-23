@@ -4,7 +4,7 @@ const { productUnitNames } = require('../../common/constants/product');
 const createProduct = {
     body: z.object({
         name: z.string().min(2).max(100),
-        description: z.string().min(10).max(1000),
+        description: z.string().min(5).max(1000),
         price: z.number().positive(),
         unit: z.enum(productUnitNames),
         stock: z.number().min(0),
@@ -19,7 +19,7 @@ const updateProduct = {
     }),
     body: z.object({
         name: z.string().min(2).max(100).optional(),
-        description: z.string().min(10).max(1000).optional(),
+        description: z.string().min(5).max(1000).optional(),
         price: z.number().positive().optional(),
         unit: z.enum(productUnitNames).optional(),
         stock: z.number().min(0).optional(),

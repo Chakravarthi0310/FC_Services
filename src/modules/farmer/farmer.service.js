@@ -45,8 +45,28 @@ const getFarmerByUserId = async (userId) => {
     return Farmer.findOne({ userId });
 };
 
+/**
+ * Get all farmers (Admin only)
+ * @returns {Promise<Farmer[]>}
+ */
+const getAllFarmers = async () => {
+    return Farmer.find().populate('userId', 'name email').sort({ createdAt: -1 });
+};
+
+/**
+ * Get pending farmers (Admin only)
+ * @returns {Promise<Farmer[]>}
+ */
+const getPendingFarmers = async () => {
+    return Farmer.find({ verificationStatus: 'PENDING' })
+        .populate('userId', 'name email')
+        .sort({ createdAt: -1 });
+};
+
 module.exports = {
     createFarmerProfile,
     updateFarmerVerification,
     getFarmerByUserId,
+    getAllFarmers,
+    getPendingFarmers,
 };
