@@ -47,10 +47,20 @@ const getUploadUrl = async (req, res, next) => {
     }
 };
 
+const getProduct = async (req, res, next) => {
+    try {
+        const product = await productService.getProductById(req.params.productId);
+        res.json(product);
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createProduct,
     updateProduct,
     deleteProduct,
     getProducts,
     getUploadUrl,
+    getProduct,
 };

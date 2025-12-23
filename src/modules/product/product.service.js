@@ -128,10 +128,24 @@ const generateUploadUrl = async (userId, productId, contentType) => {
     return { uploadUrl, imageUrl };
 };
 
+/**
+ * Get product by ID
+ * @param {string} productId
+ * @returns {Promise<Product>}
+ */
+const getProductById = async (productId) => {
+    const product = await Product.findById(productId).populate('category', 'name');
+    if (!product) {
+        throw new ApiError(404, 'Product not found');
+    }
+    return product;
+};
+
 module.exports = {
     createProduct,
     updateProduct,
     deleteProduct,
     queryProducts,
     generateUploadUrl,
+    getProductById,
 };

@@ -21,6 +21,7 @@ router.post(
 
 router
     .route('/:productId')
+    .get(validate(productValidation.getProduct), productController.getProduct)
     .patch(
         authenticate,
         authorize(roles.FARMER),
