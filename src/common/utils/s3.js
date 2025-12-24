@@ -13,7 +13,6 @@ const generatePresignedUrl = async (key, contentType) => {
     const command = new PutObjectCommand({
         Bucket: config.AWS_S3_BUCKET_NAME,
         Key: key,
-        ContentType: contentType,
     });
 
     return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL expires in 1 hour
