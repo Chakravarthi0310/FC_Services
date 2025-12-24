@@ -16,10 +16,7 @@ const generatePresignedUrl = async (key, contentType) => {
         ContentType: contentType,
     });
 
-    return getSignedUrl(s3Client, command, {
-        expiresIn: 3600,
-        unhoistableHeaders: new Set(['content-type']) // Force Content-Type to be part of the signed headers
-    });
+    return getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL expires in 1 hour
 };
 
 module.exports = {
