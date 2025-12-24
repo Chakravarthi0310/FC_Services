@@ -84,6 +84,7 @@ const createOrder = async (userId, deliveryAddress) => {
                 name: product.name,
                 price: product.price,
                 quantity: cartItem.quantity,
+                image: product.images && product.images.length > 0 ? product.images[0] : null,
             });
 
             totalAmount += product.price * cartItem.quantity;
