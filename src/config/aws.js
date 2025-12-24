@@ -7,6 +7,7 @@ const s3Client = new S3Client({
         accessKeyId: config.AWS_ACCESS_KEY_ID,
         secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
     },
+    requestChecksumCalculation: 'WHEN_REQUIRED', // Disable automatic MD5/CRC32 which can break pre-signed URLs
 });
 
 module.exports = s3Client;
