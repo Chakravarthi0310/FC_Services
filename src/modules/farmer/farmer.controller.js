@@ -34,7 +34,7 @@ const getMyProfile = async (req, res, next) => {
 
 const getAllFarmers = async (req, res, next) => {
     try {
-        const farmers = await farmerService.getAllFarmers();
+        const farmers = await farmerService.getAllFarmers(req.query);
         res.json({ success: true, data: farmers });
     } catch (error) {
         next(error);
@@ -43,7 +43,7 @@ const getAllFarmers = async (req, res, next) => {
 
 const getPendingFarmers = async (req, res, next) => {
     try {
-        const farmers = await farmerService.getPendingFarmers();
+        const farmers = await farmerService.getPendingFarmers(req.query);
         res.json({ success: true, data: farmers });
     } catch (error) {
         next(error);

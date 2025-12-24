@@ -29,7 +29,9 @@ const deleteProduct = async (req, res, next) => {
 
 const getProducts = async (req, res, next) => {
     try {
-        const products = await productService.queryProducts(req.query);
+        const { page, limit, sort, ...filter } = req.query;
+        const options = { page, limit, sort };
+        const products = await productService.queryProducts(filter, options);
         res.json(products);
     } catch (error) {
         next(error);

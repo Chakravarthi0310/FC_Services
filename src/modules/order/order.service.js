@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../../common/utils/logger');
 const razorpay = require('../../config/razorpay');
+const paginate = require('../../common/utils/paginate');
 
 /**
  * Generate unique order number
@@ -249,10 +250,14 @@ const cancelOrder = async (orderId, userId) => {
 /**
  * Get user orders
  * @param {string} userId
- * @returns {Promise<Order[]>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const getUserOrders = async (userId) => {
-    return Order.find({ userId }).sort({ createdAt: -1 });
+const getUserOrders = async (userId, options = {}) => {
+    return paginate(Order, { userId }, {
+        ...options,
+        sort: { createdAt: -1 }
+    });
 };
 
 /**
@@ -262,7 +267,7 @@ const getUserOrders = async (userId) => {
  * @returns {Promise<Order>}
  */
 const getOrderById = async (orderId, userId) => {
-    const order = await Order.findOne({ _id: orderId, userId });
+    const order = await Order.findOne({ _id: orderId, userId }).populate('items.product');
     if (!order) {
         throw new ApiError(404, 'Order not found');
     }
@@ -298,19 +303,28 @@ const updateOrderStatus = async (orderId, newStatus) => {
 /**
  * Get all orders (Admin only) with optional status filter
  * @param {string} status - Optional status filter
- * @returns {Promise<Order[]>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const getAllOrders = async (status) => {
+const getAllOrders = async (status, options = {}) => {
     const filter = status ? { status } : {};
-    return Order.find(filter).sort({ createdAt: -1 }).populate('userId', 'name email');
+    return paginate(Order, filter, {
+        ...options,
+        populate: [
+            { path: 'userId', select: 'name email' },
+            { path: 'items.productId', select: 'name farmerId' }
+        ],
+        sort: { createdAt: -1 }
+    });
 };
 
 /**
  * Get orders containing farmer's products
  * @param {string} userId - Farmer's user ID
- * @returns {Promise<Order[]>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const getFarmerOrders = async (userId) => {
+const getFarmerOrders = async (userId, options = {}) => {
     const Farmer = require('../farmer/farmer.model');
 
     // Get farmer profile
@@ -320,14 +334,14 @@ const getFarmerOrders = async (userId) => {
     }
 
     // Find orders that contain items from this farmer
-    const orders = await Order.find({
-        'items.farmerId': farmer._id
-    })
-        .sort({ createdAt: -1 })
-        .populate('userId', 'name email')
-        .populate('items.productId', 'name images');
-
-    return orders;
+    return paginate(Order, { 'items.farmerId': farmer._id }, {
+        ...options,
+        populate: [
+            { path: 'userId', select: 'name email' },
+            { path: 'items.productId', select: 'name images' }
+        ],
+        sort: { createdAt: -1 }
+    });
 };
 
 module.exports = {

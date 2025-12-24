@@ -12,12 +12,13 @@ const createOrder = async (req, res, next) => {
 
 const getUserOrders = async (req, res, next) => {
     try {
-        const orders = await orderService.getUserOrders(req.user._id);
+        const orders = await orderService.getUserOrders(req.user._id, req.query);
         res.json({ success: true, data: orders });
     } catch (error) {
         next(error);
     }
 };
+
 
 const getOrderById = async (req, res, next) => {
     try {
@@ -50,8 +51,8 @@ const cancelOrder = async (req, res, next) => {
 // Admin-only: Get all orders with optional status filter
 const getAllOrders = async (req, res, next) => {
     try {
-        const { status } = req.query;
-        const orders = await orderService.getAllOrders(status);
+        const { status, ...options } = req.query;
+        const orders = await orderService.getAllOrders(status, options);
         res.json({ success: true, data: orders });
     } catch (error) {
         next(error);
@@ -61,7 +62,7 @@ const getAllOrders = async (req, res, next) => {
 // Farmer-only: Get orders containing farmer's products
 const getFarmerOrders = async (req, res, next) => {
     try {
-        const orders = await orderService.getFarmerOrders(req.user._id);
+        const orders = await orderService.getFarmerOrders(req.user._id, req.query);
         res.json({ success: true, data: orders });
     } catch (error) {
         next(error);

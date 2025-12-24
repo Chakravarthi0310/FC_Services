@@ -3,6 +3,7 @@ const Farmer = require('../farmer/farmer.model');
 const ApiError = require('../../common/errors/ApiError');
 const { farmerVerificationStatus } = require('../../common/constants/farmer');
 const { generatePresignedUrl } = require('../../common/utils/s3');
+const paginate = require('../../common/utils/paginate');
 
 /**
  * Create a new product
@@ -83,10 +84,15 @@ const deleteProduct = async (userId, productId) => {
 /**
  * Query products
  * @param {Object} filter
- * @returns {Promise<QueryResult>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const queryProducts = async (filter = {}) => {
-    return Product.find({ isActive: true, ...filter }).populate('category', 'name');
+const queryProducts = async (filter = {}, options = {}) => {
+    return paginate(Product, { isActive: true, ...filter }, {
+        ...options,
+        populate: 'category',
+        sort: { createdAt: -1 }
+    });
 };
 
 /**

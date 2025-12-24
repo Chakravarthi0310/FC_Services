@@ -1,5 +1,6 @@
 const Farmer = require('./farmer.model');
 const ApiError = require('../../common/errors/ApiError');
+const paginate = require('../../common/utils/paginate');
 
 /**
  * Create a farmer profile
@@ -47,20 +48,28 @@ const getFarmerByUserId = async (userId) => {
 
 /**
  * Get all farmers (Admin only)
- * @returns {Promise<Farmer[]>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const getAllFarmers = async () => {
-    return Farmer.find().populate('userId', 'name email').sort({ createdAt: -1 });
+const getAllFarmers = async (options = {}) => {
+    return paginate(Farmer, {}, {
+        ...options,
+        populate: 'userId',
+        sort: { createdAt: -1 }
+    });
 };
 
 /**
  * Get pending farmers (Admin only)
- * @returns {Promise<Farmer[]>}
+ * @param {Object} options - Pagination options
+ * @returns {Promise<Object>}
  */
-const getPendingFarmers = async () => {
-    return Farmer.find({ verificationStatus: 'PENDING' })
-        .populate('userId', 'name email')
-        .sort({ createdAt: -1 });
+const getPendingFarmers = async (options = {}) => {
+    return paginate(Farmer, { verificationStatus: 'PENDING' }, {
+        ...options,
+        populate: 'userId',
+        sort: { createdAt: -1 }
+    });
 };
 
 module.exports = {
