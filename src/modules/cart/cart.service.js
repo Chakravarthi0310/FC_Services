@@ -105,34 +105,37 @@ const getCart = async (userId) => {
         cart = await Cart.create({ userId, items: [] });
     }
 
+    // Auto-prune inactive or deleted products from the database cart
+    const initialItemCount = cart.items.length;
+    cart.items = cart.items.filter(item => item.productId && item.productId.isActive);
+
+    if (cart.items.length !== initialItemCount) {
+        await cart.save();
+    }
+
     // Calculate subtotals and total server-side
     let cartTotal = 0;
     const items = [];
 
     cart.items.forEach((item) => {
         const product = item.productId;
+        const subtotal = product.price * item.quantity;
+        cartTotal += subtotal;
 
-        if (product && product.isActive) {
-            const subtotal = product.price * item.quantity;
-            cartTotal += subtotal;
-
-            items.push({
-                productId: {
-                    _id: product._id,
-                    name: product.name,
-                    price: product.price,
-                    images: product.images,
-                    unit: product.unit,
-                    stock: product.stock,
-                    isActive: product.isActive
-                },
-                quantity: item.quantity,
-                priceAtAddTime: item.priceAtAddTime || product.price,
-                subtotal: Number(subtotal.toFixed(2)),
-            });
-        }
-        // If product is inactive or deleted, we skip it or keep with error?
-        // Let's follow frontend types and just provide what's needed.
+        items.push({
+            productId: {
+                _id: product._id,
+                name: product.name,
+                price: product.price,
+                images: product.images,
+                unit: product.unit,
+                stock: product.stock,
+                isActive: product.isActive
+            },
+            quantity: item.quantity,
+            priceAtAddTime: item.priceAtAddTime || product.price,
+            subtotal: Number(subtotal.toFixed(2)),
+        });
     });
 
     return {

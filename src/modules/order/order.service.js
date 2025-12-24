@@ -48,7 +48,8 @@ const createOrder = async (userId, deliveryAddress) => {
             const product = await Product.findById(cartItem.productId._id).session(session);
 
             if (!product || !product.isActive) {
-                throw new ApiError(400, `Product ${cartItem.productId.name} is no longer available`);
+                logger.warn(`Product ${cartItem.productId?.name || 'Unknown'} skipped in checkout - no longer available`);
+                continue;
             }
 
             // Hard Check: Atomic stock validation
@@ -86,6 +87,10 @@ const createOrder = async (userId, deliveryAddress) => {
             });
 
             totalAmount += product.price * cartItem.quantity;
+        }
+
+        if (orderItems.length === 0) {
+            throw new ApiError(400, 'No valid items available for checkout. Your cart has been updated.');
         }
 
         // Generate unique order number
