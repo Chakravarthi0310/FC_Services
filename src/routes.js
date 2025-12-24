@@ -7,6 +7,7 @@ const orderRoute = require('./modules/order/order.routes');
 const paymentRoute = require('./modules/payment/payment.routes');
 const categoryRoute = require('./modules/category/category.routes');
 const adminRoute = require('./modules/admin/admin.routes');
+const reviewRoute = require('./modules/review/review.routes');
 
 const { authenticate, authorize } = require('./common/middleware/auth');
 const { roles } = require('./common/constants/roles');
@@ -21,6 +22,7 @@ router.use('/orders', orderRoute);
 router.use('/payments', paymentRoute);
 router.use('/categories', categoryRoute);
 router.use('/admin', adminRoute);
+router.use('/reviews', reviewRoute);
 
 router.get('/', (req, res) => {
     res.json({ message: 'Welcome to FC Services API' });
